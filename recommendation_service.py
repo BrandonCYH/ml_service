@@ -14,7 +14,7 @@ def get_conn():
         dbname="postgres",
         user="postgres",
         password="gLdv4DObzlTii1RV",
-        host="db.zavcdgxjqbkpsafishmg.supabase.co",
+        host="aws-0-ap-southeast-1.pooler.supabase.com",
         port="5432"
     )
 
@@ -96,6 +96,7 @@ async def recommend_items(req: RecommendRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 
 
 
