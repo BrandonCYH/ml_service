@@ -1,22 +1,22 @@
 import psycopg2
 import pickle
 import numpy as np
+
 from fastapi import FastAPI, UploadFile, Form, HTTPException
 from pydantic import BaseModel
-import os
+from psycopg2.extras import RealDictCursor
 
 app = FastAPI()
 
 # 🔗 Connect to Laravel’s Postgres
-conn = psycopg2.connect(
-    dbname=os.getenv("DB_NAME"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASS"),
-    host=os.getenv("DB_HOST"),
-    port=os.getenv("DB_PORT"),
-    sslmode="require"
-)
-cursor = conn.cursor()
+def get_conn():
+    return psycopg2.connect(
+        dbname="postgres",
+        user="postgres",
+        password="gLdv4DObzlTii1RV",
+        host="db.zavcdgxjqbkpsafishmg.supabase.co",
+        port="5432"
+    )
 
 # 🔹 Stub: replace with CLIP later
 def get_embedding(image_bytes: bytes) -> np.ndarray:
@@ -29,23 +29,21 @@ async def add_product(
     name: str = Form(...),
     image: UploadFile = None
 ):
+    image_bytes = await image.read() if image else None
+    embedding = get_embedding(image_bytes)
+
     try:
-        image_bytes = await image.read()
-        embedding = get_embedding(image_bytes)
-
-        cursor.execute("""
-            INSERT INTO product_embeddings (product_id, name, embedding)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (product_id) DO UPDATE
-            SET name = EXCLUDED.name,
-                embedding = EXCLUDED.embedding
-        """, (product_id, name, psycopg2.Binary(pickle.dumps(embedding))))
-
-        conn.commit()
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO product_embeddings (product_id, name, embedding)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (product_id) DO UPDATE
+                    SET name = EXCLUDED.name,
+                        embedding = EXCLUDED.embedding
+                """, (product_id, name, psycopg2.Binary(pickle.dumps(embedding))))
         return {"message": "Product added successfully", "product_id": product_id}
-
     except Exception as e:
-        conn.rollback()  # 👈 reset transaction state
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -57,33 +55,40 @@ class RecommendRequest(BaseModel):
 # 🟢 Recommend similar products
 @app.post("/recommend/")
 async def recommend_items(req: RecommendRequest):
-    # Get target embedding
-    cursor.execute("SELECT embedding FROM product_embeddings WHERE product_id = %s", (str(req.product_id),))
-    row = cursor.fetchone()
-    if not row:
-        return {"error": "Product not found"}
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                # Get target embedding
+                cursor.execute(
+                    "SELECT embedding FROM product_embeddings WHERE product_id = %s", 
+                    (req.product_id,)
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return {"error": "Product not found"}
+                target_embedding = pickle.loads(row[0])
 
-    target_embedding = pickle.loads(row[0])
+                # Get all other products
+                cursor.execute(
+                    "SELECT product_id, name, embedding FROM product_embeddings WHERE product_id != %s", 
+                    (req.product_id,)
+                )
+                rows = cursor.fetchall()
 
-    # Get all other products
-    cursor.execute("SELECT product_id, name, embedding FROM product_embeddings WHERE product_id != %s", (str(req.product_id),))
-    rows = cursor.fetchall()
+        # Compute similarities outside the connection
+        similarities = []
+        for pid, name, emb_blob in rows:
+            emb = pickle.loads(emb_blob)
+            sim = np.dot(target_embedding, emb) / (np.linalg.norm(target_embedding) * np.linalg.norm(emb))
+            similarities.append((pid, name, float(sim)))
 
-    similarities = []
-    for pid, name, emb_blob in rows:
-        emb = pickle.loads(emb_blob)
-        sim = np.dot(target_embedding, emb) / (np.linalg.norm(target_embedding) * np.linalg.norm(emb))
-        similarities.append((pid, name, float(sim)))
+        similarities.sort(key=lambda x: x[2], reverse=True)
+        recommendations = [
+            {"product_id": pid, "name": name, "similarity": sim}
+            for pid, name, sim in similarities[:req.top_k]
+        ]
 
-    # Sort & return top_k
-    similarities.sort(key=lambda x: x[2], reverse=True)
-    recommendations = [
-        {"product_id": pid, "name": name, "similarity": sim}
-        for pid, name, sim in similarities[:req.top_k]
-    ]
-    
-    print("Looking for product_id:", req.product_id)
+        return {"recommendations": recommendations}
 
-    return {"recommendations": recommendations}
-
-
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
