@@ -57,7 +57,7 @@ class RecommendRequest(BaseModel):
     top_k: int = 5
 
 # 🟢 Recommend similar products
-@app.get("/recommend/")
+@app.post("/recommend/")
 async def recommend_items(req: RecommendRequest):
     try:
         with get_conn() as conn:
@@ -96,5 +96,6 @@ async def recommend_items(req: RecommendRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 
 
