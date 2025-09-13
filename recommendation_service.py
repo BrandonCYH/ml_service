@@ -12,10 +12,10 @@ app = FastAPI()
 def get_conn():
     return psycopg2.connect(
         dbname="postgres",
-        user="postgres",
+        user="postgres.zavcdgxjqbkpsafishmg",
         password="gLdv4DObzlTii1RV",
         host="aws-0-ap-southeast-1.pooler.supabase.com",
-        port="5432"
+        port="6543"
     )
 
 @app.get("/")
@@ -96,6 +96,7 @@ async def recommend_items(req: RecommendRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 
 
 
