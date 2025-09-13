@@ -3,16 +3,17 @@ import pickle
 import numpy as np
 from fastapi import FastAPI, UploadFile, Form, HTTPException
 from pydantic import BaseModel
+import os
 
 app = FastAPI()
 
 # 🔗 Connect to Laravel’s Postgres
 conn = psycopg2.connect(
-    dbname="postgres",
-    user="postgres",
-    password="gLdv4DObzlTii1RV",
-    host="db.zavcdgxjqbkpsafishmg.supabase.co",
-    port="5432"
+    dbname=os.getenv("DB_NAME"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASS"),
+    host=os.getenv("DB_HOST"),
+    port=os.getenv("DB_PORT")
 )
 cursor = conn.cursor()
 
@@ -83,3 +84,4 @@ async def recommend_items(req: RecommendRequest):
     print("Looking for product_id:", req.product_id)
 
     return {"recommendations": recommendations}
+
