@@ -10,3 +10,5 @@ git+https://github.com/openai/CLIP.git
 numpy
 pillow
 psycopg2-binary
+python-multipart
+
