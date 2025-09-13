@@ -18,6 +18,10 @@ def get_conn():
         port="5432"
     )
 
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
 # 🔹 Stub: replace with CLIP later
 def get_embedding(image_bytes: bytes) -> np.ndarray:
     return np.random.rand(512)
@@ -92,3 +96,4 @@ async def recommend_items(req: RecommendRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
